@@ -7,7 +7,6 @@ library(tidyverse)
 library(treemap)
 library(ggplot2)
 library(RColorBrewer) #treemap automatically accepts colourbrewer colours!
-library(mapproj) #library to make a world map
 
 ###Reading and Checking Data----
 
@@ -55,7 +54,9 @@ cat("Total bins:", bin_richness,",",
 #Generating new data frame for specimens obtained from all countries and grouping by country to see bin richness per country. General checking of data frame generation is also seen below
 all_countries <- trimmed_data %>%
   group_by(country) %>%
-  count(country)
+  count(bin_uri) %>% #bin_uri has been grouped by country, count() counts the number of times xyz bin occurs in xyz country (but does not include 0 occurrences)
+  group_by(country) %>%
+  count(country) #counts the number of times each country appears in the dataframe (which equals the number of bins that occur in that country)
 class(all_countries)
 dim(all_countries)
 attributes(all_countries)
@@ -70,6 +71,8 @@ specimens_by_country
 #Generating new data frame for specimens obtained from Mediterranean latitude (between 30 and 40 degrees north of Equator) and grouping by country to see bin richness per country. General checking of data frame generation is also seen below
 mediterranean_bins <- trimmed_data %>%
   filter(between(lat,30,40)) %>%
+  group_by(country) %>%
+  count(bin_uri) %>%
   group_by(country) %>%
   count(country)
 class(mediterranean_bins)
@@ -116,58 +119,33 @@ Barplot <- ggplot(mediterranean_bins, aes(x=country, y=n)) +
 Barplot + labs(title="Distribution of Salamandridae Bin Richness Among Countries Across Mediterranean Cimate Latitude",
   y="Bin Richness", x="Country")
 
-###Mapping Salamandridae and Plethodontidae----
+###T-test: Mediterranean vs Non-Mediterranean----
 
-#Adding a new salamander family (Plethodontidae) to compare ranges to the Salamandridae (making a map)
-dfPleth <- vroom("http://www.boldsystems.org/index.php/API_Public/combined?taxon=Plethodontidae&format=tsv")
-write_tsv(dfPleth, "Raw_Plethodontidae_Data.tsv")
-dfPleth <- vroom("Raw_Plethodontidae_Data.tsv")
+#Are the data normally distributed? (Shapiro-Wilk)
+shapiro.test(all_countries$n[all_countries$mediterranean == "Yes"]) #No
+shapiro.test(all_countries$n[all_countries$mediterranean == "No"]) #Also no
 
-#Remove all columns missing latitude and longitude data (Plethodontidae)
-dfFiltered <- dfPleth %>%
-  drop_na(lat) %>%
-  drop_na(lon)
+#Transform values to try to make them normally distributed
+all_countries$log <- log(all_countries$n)
 
-#Filter the Salamandridae data the same way (keep lon)
-dfSala <- raw_data %>%
-  drop_na(lat) %>%
-  drop_na(lon)
+#Are this new data normally distributed? 
+shapiro.test(all_countries$log[all_countries$mediterranean == "Yes"]) #No
+shapiro.test(all_countries$log[all_countries$mediterranean == "No"]) #Also no
+#Ok, non-parametric it is!
 
-#Combine dataframes so that the map's latitude and longitude limits aren't hardcoded 
-dfBoth <- rbind(dfFiltered, dfSala)
+#Test if the two distributions are the same with Kolmogorov–Smirnov test
+ks.test(all_countries$n[all_countries$mediterranean == "Yes"], all_countries$n[all_countries$mediterranean == "No"])
+#p = 0.9... I think this means that their distributions are similar enough to satisfy the assumptions of a Kruskal-Wallis test
 
-##Save some colours off colourbrewer
-colours <- data.frame(brewer.pal(8, "Set2")) 
+#Perform Kruskal-Wallis test comparing Mediterranean and non-Mediterranean
+kruskal.test(all_countries$log~all_countries$mediterranean)
+#Results are not statistically significant (X2 = 0.14, p = 0.70), so do not need to do a Dunn test
 
-#Create the map 
-#https://www.molecularecologist.com/2012/09/18/making-maps-with-r/
-map(database= "world", 
-    ylim=c(min(dfBoth$lat),max(dfBoth$lat)), #set max and min lat 
-    xlim=c(min(dfBoth$lon),max(dfBoth$lon)), #set max and min longitude
-    col="#e8e9eb", #colour of countries 
-    fill=TRUE, #countries are coloured in, otherwise look faded
-    projection="gilbert", #type of map
-    orientation= c(90,0,360)) #what angle are you looking at the map from
-
-#Create coordinate variables to place on the map (first Plethodontidae, then Salamandridae)
-coord_p <- mapproject(dfFiltered$lon, #longitude
-                      dfFiltered$lat, #latitude
-                      proj="gilbert", 
-                      orientation=c(90, 0, 360)) #orientation needs to match the map's
-coord_s <- mapproject(dfSala$lon, dfSala$lat, proj="gilbert", orientation=c(90, 0, 360))
-
-#Add the points to the map
-points(coord_p, #Plethodontidae
-       pch=20, #point shape
-       cex=1.2, #point size
-       col=colours[1,]) #point colour (taken from colourbrewer object)
-points(coord_s, pch=20, cex=1.2, col=colours[2,]) #Salamandridae
-
-#Add legend 
-legend("bottomright", #set legend to bottom right of map
-       legend = c("Plethodontidae", "Salamandridae"),
-       pch=20, #point shape
-       pt.cex = 1.2, #point size
-       col=colours[1:2,], #colours of icon
-       title="Family Name",
-       cex=0.75) #size of legend box
+#Graph the results in a boxplot (even though they are not significantly different)
+ggplot(all_countries, aes(mediterranean, n)) +
+  geom_boxplot(aes(fill = mediterranean), show.legend = FALSE) +
+  scale_fill_brewer(palette="Set2") +
+  labs(title = "Distribution of bin richness between countries with and without Mediterranean latitudes",
+       y = "Bin Richness",
+       x = "Does the country have a Mediterranean latitude?") +
+  theme_bw()
