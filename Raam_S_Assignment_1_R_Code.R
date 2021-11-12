@@ -7,6 +7,7 @@ library(tidyverse)
 library(treemap)
 library(ggplot2)
 library(RColorBrewer) #treemap automatically accepts colourbrewer colours!
+library(mapproj) #library to make a world map
 
 ###Reading and Checking Data----
 
@@ -115,3 +116,58 @@ Barplot <- ggplot(mediterranean_bins, aes(x=country, y=n)) +
 Barplot + labs(title="Distribution of Salamandridae Bin Richness Among Countries Across Mediterranean Cimate Latitude",
   y="Bin Richness", x="Country")
 
+###Mapping Salamandridae and Plethodontidae----
+
+#Adding a new salamander family (Plethodontidae) to compare ranges to the Salamandridae (making a map)
+dfPleth <- vroom("http://www.boldsystems.org/index.php/API_Public/combined?taxon=Plethodontidae&format=tsv")
+write_tsv(dfPleth, "Raw_Plethodontidae_Data.tsv")
+dfPleth <- vroom("Raw_Plethodontidae_Data.tsv")
+
+#Remove all columns missing latitude and longitude data (Plethodontidae)
+dfFiltered <- dfPleth %>%
+  drop_na(lat) %>%
+  drop_na(lon)
+
+#Filter the Salamandridae data the same way (keep lon)
+dfSala <- raw_data %>%
+  drop_na(lat) %>%
+  drop_na(lon)
+
+#Combine dataframes so that the map's latitude and longitude limits aren't hardcoded 
+dfBoth <- rbind(dfFiltered, dfSala)
+
+##Save some colours off colourbrewer
+colours <- data.frame(brewer.pal(8, "Set2")) 
+
+#Create the map 
+#https://www.molecularecologist.com/2012/09/18/making-maps-with-r/
+map(database= "world", 
+    ylim=c(min(dfBoth$lat),max(dfBoth$lat)), #set max and min lat 
+    xlim=c(min(dfBoth$lon),max(dfBoth$lon)), #set max and min longitude
+    col="#e8e9eb", #colour of countries 
+    fill=TRUE, #countries are coloured in, otherwise look faded
+    projection="gilbert", #type of map
+    orientation= c(90,0,360)) #what angle are you looking at the map from
+
+#Create coordinate variables to place on the map (first Plethodontidae, then Salamandridae)
+coord_p <- mapproject(dfFiltered$lon, #longitude
+                      dfFiltered$lat, #latitude
+                      proj="gilbert", 
+                      orientation=c(90, 0, 360)) #orientation needs to match the map's
+coord_s <- mapproject(dfSala$lon, dfSala$lat, proj="gilbert", orientation=c(90, 0, 360))
+
+#Add the points to the map
+points(coord_p, #Plethodontidae
+       pch=20, #point shape
+       cex=1.2, #point size
+       col=colours[1,]) #point colour (taken from colourbrewer object)
+points(coord_s, pch=20, cex=1.2, col=colours[2,]) #Salamandridae
+
+#Add legend 
+legend("bottomright", #set legend to bottom right of map
+       legend = c("Plethodontidae", "Salamandridae"),
+       pch=20, #point shape
+       pt.cex = 1.2, #point size
+       col=colours[1:2,], #colours of icon
+       title="Family Name",
+       cex=0.75) #size of legend box
