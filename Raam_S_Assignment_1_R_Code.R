@@ -82,11 +82,23 @@ attributes(mediterranean_bins)
 all_countries$labels <- paste(all_countries$country, all_countries$n, #"combine" both columns
                               sep = "\n") #separator = newline character
 
+#Add a new column to all_countries that indicates whether the country is from a mediterranean latitude (based on if the country name is also found in mediterranean_bins)--for treemap
+for (i in 1:nrow(all_countries)) { #iterate through all rows of all_countries
+  if (all_countries$country[i] %in% mediterranean_bins$country){ #if country name is found in mediterranean_bins
+    all_countries$mediterranean[i] = "Yes" #add Yes
+  } else {
+    all_countries$mediterranean[i] = "No" #otherwise add No
+  }
+}
+
 #Tree map visualizing the distribution of bin richness across all the available countries within the dataset
 Treemap <- treemap(all_countries,index="labels", #changed labels from all_countries$country to all_countries$labels
-                   vSize="n",type="index",
+                   vSize="n",type="categorical", #able to colour boxes based on categorical variables
+                   vColor = "mediterranean", #colours based on whether the country is mediterranean or not (lat 30-40)
                    palette = "Set2", #colourblind friendly colourbrewer palette
                    fontsize.labels = 10, #labels are longer now, so I made the fontsize a bit smaller
+                   title.legend = "Does the country contain Mediterranean latitudes?", #change legend name
+                   position.legend = "bottom", #sticks the legend at the bottom
                    title="Visualization of Salamandridae Bin Richness Distribution", aspRatio = 1.5)
 
 #Boxplot showing the distribution of bin richness across different latitudes among various countries
