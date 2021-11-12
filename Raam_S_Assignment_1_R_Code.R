@@ -6,6 +6,8 @@ library(vroom)
 library(tidyverse)
 library(treemap)
 library(ggplot2)
+library(RColorBrewer) #treemap automatically accepts colourbrewer colours!
+library(mapproj) #library to make a world map
 
 ###Reading and Checking Data----
 
@@ -76,8 +78,29 @@ attributes(mediterranean_bins)
 
 ###Plotting----
 
+#Add a new column to all_countries that has the Country name, Bin Richness value (i.e. "China, 34"), for treemap
+#https://stackoverflow.com/questions/29253844/r-treemap-how-to-add-multiple-labels/29254734
+all_countries$labels <- paste(all_countries$country, all_countries$n, #"combine" both columns
+                              sep = "\n") #separator = newline character
+
+#Add a new column to all_countries that indicates whether the country is from a mediterranean latitude (based on if the country name is also found in mediterranean_bins)--for treemap
+for (i in 1:nrow(all_countries)) { #iterate through all rows of all_countries
+  if (all_countries$country[i] %in% mediterranean_bins$country){ #if country name is found in mediterranean_bins
+    all_countries$mediterranean[i] = "Yes" #add Yes
+  } else {
+    all_countries$mediterranean[i] = "No" #otherwise add No
+  }
+}
+
 #Tree map visualizing the distribution of bin richness across all the available countries within the dataset
-Treemap <- treemap(all_countries,index="country",vSize="n",type="index", fontsize.labels = 15, title="Visualization of Salamandridae Bin Richness Distribution", aspRatio = 1.5)
+Treemap <- treemap(all_countries,index="labels", #changed labels from all_countries$country to all_countries$labels
+                   vSize="n",type="categorical", #able to colour boxes based on categorical variables
+                   vColor = "mediterranean", #colours based on whether the country is mediterranean or not (lat 30-40)
+                   palette = "Set2", #colourblind friendly colourbrewer palette
+                   fontsize.labels = 10, #labels are longer now, so I made the fontsize a bit smaller
+                   title.legend = "Does the country contain Mediterranean latitudes?", #change legend name
+                   position.legend = "bottom", #sticks the legend at the bottom
+                   title="Visualization of Salamandridae Bin Richness Distribution", aspRatio = 1.5)
 
 #Boxplot showing the distribution of bin richness across different latitudes among various countries
 Boxplot <- ggplot(trimmed_data, aes(x=country, y=lat)) +
@@ -92,3 +115,59 @@ Barplot <- ggplot(mediterranean_bins, aes(x=country, y=n)) +
   theme_minimal() + theme(text=element_text(size=18))
 Barplot + labs(title="Distribution of Salamandridae Bin Richness Among Countries Across Mediterranean Cimate Latitude",
   y="Bin Richness", x="Country")
+
+###Mapping Salamandridae and Plethodontidae----
+
+#Adding a new salamander family (Plethodontidae) to compare ranges to the Salamandridae (making a map)
+dfPleth <- vroom("http://www.boldsystems.org/index.php/API_Public/combined?taxon=Plethodontidae&format=tsv")
+write_tsv(dfPleth, "Raw_Plethodontidae_Data.tsv")
+dfPleth <- vroom("Raw_Plethodontidae_Data.tsv")
+
+#Remove all columns missing latitude and longitude data (Plethodontidae)
+dfFiltered <- dfPleth %>%
+  drop_na(lat) %>%
+  drop_na(lon)
+
+#Filter the Salamandridae data the same way (keep lon)
+dfSala <- raw_data %>%
+  drop_na(lat) %>%
+  drop_na(lon)
+
+#Combine dataframes so that the map's latitude and longitude limits aren't hardcoded 
+dfBoth <- rbind(dfFiltered, dfSala)
+
+##Save some colours off colourbrewer
+colours <- data.frame(brewer.pal(8, "Set2")) 
+
+#Create the map 
+#https://www.molecularecologist.com/2012/09/18/making-maps-with-r/
+map(database= "world", 
+    ylim=c(min(dfBoth$lat),max(dfBoth$lat)), #set max and min lat 
+    xlim=c(min(dfBoth$lon),max(dfBoth$lon)), #set max and min longitude
+    col="#e8e9eb", #colour of countries 
+    fill=TRUE, #countries are coloured in, otherwise look faded
+    projection="gilbert", #type of map
+    orientation= c(90,0,360)) #what angle are you looking at the map from
+
+#Create coordinate variables to place on the map (first Plethodontidae, then Salamandridae)
+coord_p <- mapproject(dfFiltered$lon, #longitude
+                      dfFiltered$lat, #latitude
+                      proj="gilbert", 
+                      orientation=c(90, 0, 360)) #orientation needs to match the map's
+coord_s <- mapproject(dfSala$lon, dfSala$lat, proj="gilbert", orientation=c(90, 0, 360))
+
+#Add the points to the map
+points(coord_p, #Plethodontidae
+       pch=20, #point shape
+       cex=1.2, #point size
+       col=colours[1,]) #point colour (taken from colourbrewer object)
+points(coord_s, pch=20, cex=1.2, col=colours[2,]) #Salamandridae
+
+#Add legend 
+legend("bottomright", #set legend to bottom right of map
+       legend = c("Plethodontidae", "Salamandridae"),
+       pch=20, #point shape
+       pt.cex = 1.2, #point size
+       col=colours[1:2,], #colours of icon
+       title="Family Name",
+       cex=0.75) #size of legend box
