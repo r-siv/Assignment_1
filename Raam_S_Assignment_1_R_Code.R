@@ -6,6 +6,7 @@ library(vroom)
 library(tidyverse)
 library(treemap)
 library(ggplot2)
+library(RColorBrewer) #treemap automatically accepts colourbrewer colours!
 
 ###Reading and Checking Data----
 
@@ -76,8 +77,17 @@ attributes(mediterranean_bins)
 
 ###Plotting----
 
+#Add a new column to all_countries that has the Country name, Bin Richness value (i.e. "China, 34"), for treemap
+#https://stackoverflow.com/questions/29253844/r-treemap-how-to-add-multiple-labels/29254734
+all_countries$labels <- paste(all_countries$country, all_countries$n, #"combine" both columns
+                              sep = "\n") #separator = newline character
+
 #Tree map visualizing the distribution of bin richness across all the available countries within the dataset
-Treemap <- treemap(all_countries,index="country",vSize="n",type="index", fontsize.labels = 15, title="Visualization of Salamandridae Bin Richness Distribution", aspRatio = 1.5)
+Treemap <- treemap(all_countries,index="labels", #changed labels from all_countries$country to all_countries$labels
+                   vSize="n",type="index",
+                   palette = "Set2", #colourblind friendly colourbrewer palette
+                   fontsize.labels = 10, #labels are longer now, so I made the fontsize a bit smaller
+                   title="Visualization of Salamandridae Bin Richness Distribution", aspRatio = 1.5)
 
 #Boxplot showing the distribution of bin richness across different latitudes among various countries
 Boxplot <- ggplot(trimmed_data, aes(x=country, y=lat)) +
@@ -92,3 +102,4 @@ Barplot <- ggplot(mediterranean_bins, aes(x=country, y=n)) +
   theme_minimal() + theme(text=element_text(size=18))
 Barplot + labs(title="Distribution of Salamandridae Bin Richness Among Countries Across Mediterranean Cimate Latitude",
   y="Bin Richness", x="Country")
+
