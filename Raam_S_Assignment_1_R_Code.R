@@ -1,5 +1,10 @@
 ###Raam Sivakumar-BINF*6210-Assignment 1 Code
 
+###Attribution: Raam Sivakumar chose the question and organism group. He decided appropriate data filtering and quality control steps. He created all graphs under the section Plotting.  
+  ##Amy edited the Treemap plot, changed the order of some data filtering commands, and added a statistical test. 
+  ##How this breaks down in the script: Lines 5 to 123 (exlcuding lines 86 to 98) were created by Raam. Lines 124 to 153 and lines 86 to 98 were created by Amy. 
+  ##Amy edited line 11, lines 59 to 61, lines 78 to 80, and lines 102 to 109. 
+
 ###Loading Packages----
 
 library(vroom)
@@ -119,7 +124,7 @@ Barplot <- ggplot(mediterranean_bins, aes(x=country, y=n)) +
 Barplot + labs(title="Distribution of Salamandridae Bin Richness Among Countries Across Mediterranean Cimate Latitude",
   y="Bin Richness", x="Country")
 
-###T-test: Mediterranean vs Non-Mediterranean----
+###Statistical Test: Mediterranean vs Non-Mediterranean----
 
 #Are the data normally distributed? (Shapiro-Wilk)
 shapiro.test(all_countries$n[all_countries$mediterranean == "Yes"]) #No
@@ -128,7 +133,7 @@ shapiro.test(all_countries$n[all_countries$mediterranean == "No"]) #Also no
 #Transform values to try to make them normally distributed
 all_countries$log <- log(all_countries$n)
 
-#Are this new data normally distributed? 
+#Are these new data normally distributed? 
 shapiro.test(all_countries$log[all_countries$mediterranean == "Yes"]) #No
 shapiro.test(all_countries$log[all_countries$mediterranean == "No"]) #Also no
 #Ok, non-parametric it is!
